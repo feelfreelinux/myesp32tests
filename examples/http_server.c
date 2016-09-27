@@ -9,21 +9,11 @@ int state = 0;
 const static char http_html_hdr[] = "HTTP/1.1 200 OK\r\nContent-type: text/html\r\n\r\n";
 const static char http_index_hml[] = "<html><head><title>Control</title></head><body><h1>Control</h1><a href=\"h\">On</a><br><a href=\"l\">Off</a></body></html>";
 
-/* The examples use simple WiFi configuration that you can set via
-   'make menuconfig'.
-   If you'd rather not, just change the below entries to strings with
-   the config you want - ie #define EXAMPLE_WIFI_SSID "mywifissid"
-*/
 #define EXAMPLE_WIFI_SSID "SSID"
 #define EXAMPLE_WIFI_PASS "PASSWORD"
 const int DIODE_PIN = 5;
 
-/* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
-
-/* The event group allows multiple bits for each event,
-   but we only care about one event - are we connected
-   to the AP with an IP? */
 const int CONNECTED_BIT = BIT0;
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
@@ -117,7 +107,7 @@ http_server_netconn_serve(struct netconn *conn)
   netbuf_delete(inbuf);
 }
 
-static void http_get_task(void *pvParameters)
+static void http_server(void *pvParameters)
 {
   struct netconn *conn, *newconn;
   err_t err;
@@ -140,5 +130,5 @@ void app_main()
     nvs_flash_init();
     system_init();
     initialise_wifi();
-    xTaskCreate(&http_get_task, "http_get_task", 2048, NULL, 5, NULL);
+    xTaskCreate(&http_get_task, "http_server", 2048, NULL, 5, NULL);
 }
