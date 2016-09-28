@@ -5,17 +5,59 @@
 #include "lwip/tcp.h"
 #include "lwip/ip4_addr.h"
 #include "string.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
 #include "esp_wifi.h"
-#include "esp_event.h"
-#include "esp_wifi.h"
-#include "rom/gpio.h"
+#include "esp_event_loop.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
 #include "lwip/inet.h"
-ip4_addr_t ip;
-ip4_addr_t gw;
-ip4_addr_t msk;
-bool bConnected = false;
-bool bDNSFound = false;
 struct tcp_pcb *testpcb;
+#define EXAMPLE_WIFI_SSID "SSID"
+#define EXAMPLE_WIFI_PASS "PASS"
+
+static EventGroupHandle_t wifi_event_group;
+const int CONNECTED_BIT = BIT0;
+
+static esp_err_t event_handler(void *ctx, system_event_t *event)
+{
+    switch(event->event_id) {
+    case SYSTEM_EVENT_STA_START:
+        esp_wifi_connect();
+        break;
+    case SYSTEM_EVENT_STA_GOT_IP:
+        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
+        break;
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+        /* This is a workaround as ESP32 WiFi libs don't currently
+           auto-reassociate. */
+        esp_wifi_connect();
+        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+        break;
+    default:
+        break;
+    }
+    return ESP_OK;
+}
+
+static void initialise_wifi(void)
+{
+    tcpip_adapter_init();
+    wifi_event_group = xEventGroupCreate();
+    ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
+    ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = EXAMPLE_WIFI_SSID,
+            .password = EXAMPLE_WIFI_PASS,
+        },
+    };
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
+    ESP_ERROR_CHECK( esp_wifi_start() );
+}
 err_t tcpRecvCallback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 {
     printf("Data recieved.\n");
@@ -84,45 +126,7 @@ void tcp_setup(void)
     tcp_connect(testpcb, &ip, 80, connectCallback);
 
 }
-esp_err_t wifi_event_cb(void *ctx, system_event_t *event)
-{
-    if( event->event_id == SYSTEM_EVENT_STA_GOT_IP ) {
-        ip = event->event_info.got_ip.ip_info.ip;
-        gw = event->event_info.got_ip.ip_info.gw;
-        msk = event->event_info.got_ip.ip_info.netmask;
-        bConnected = true;
-    }
 
-    return ESP_OK;
-}
-void connect_wifi(void){
-  esp_event_set_cb(wifi_event_cb, NULL);
-
-  printf("Set mode to STA\n");
-  esp_wifi_set_mode(WIFI_MODE_STA);
-
-  wifi_config_t config;
-  memset(&config,0,sizeof(config));
-
-  strcpy( config.sta.ssid, "SSID" );
-  strcpy( config.sta.password, "Password" );
-
-  printf("Set config\n");
-  esp_wifi_set_config( WIFI_IF_STA, &config );
-
-  printf("Start\n");
-  esp_wifi_start();
-
-  printf("Connect\n");
-  esp_wifi_connect();
-
-  while( !bConnected )
-      ;
-
-  printf("Got IP: %s\n", inet_ntoa( ip ) );
-  printf("Net mask: %s\n", inet_ntoa( msk ) );
-  printf("Gateway: %s\n", inet_ntoa( gw ) );
-}
 void mainTask(void *pvParameters){
   connect_wifi();
   tcp_setup();
@@ -137,5 +141,8 @@ void mainTask(void *pvParameters){
 }
 void app_main()
 {
+    nvs_flash_init();
+    system_init();
+    initialise_wifi();
   xTaskCreatePinnedToCore(&mainTask, "mainTask", 2048, NULL, 5, NULL, 0);
 }
