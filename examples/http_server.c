@@ -2,6 +2,17 @@
 GPIO control over http server.
 Big thanks to esp-idf examples for wifi connecting and lwip httpserver_netconn example
 */
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_event_loop.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "driver/gpio.h"
+
 #include "lwip/sys.h"
 #include "lwip/netdb.h"
 #include "lwip/api.h"
@@ -10,7 +21,7 @@ const static char http_html_hdr[] = "HTTP/1.1 200 OK\r\nContent-type: text/html\
 const static char http_index_hml[] = "<html><head><title>Control</title></head><body><h1>Control</h1><a href=\"h\">On</a><br><a href=\"l\">Off</a></body></html>";
 
 #define EXAMPLE_WIFI_SSID "SSID"
-#define EXAMPLE_WIFI_PASS "PASSWORD"
+#define EXAMPLE_WIFI_PASS "PASS"
 const int DIODE_PIN = 5;
 
 static EventGroupHandle_t wifi_event_group;
@@ -130,5 +141,5 @@ void app_main()
     nvs_flash_init();
     system_init();
     initialise_wifi();
-    xTaskCreate(&http_get_task, "http_server", 2048, NULL, 5, NULL);
+    xTaskCreate(&http_server, "http_server", 2048, NULL, 5, NULL);
 }
