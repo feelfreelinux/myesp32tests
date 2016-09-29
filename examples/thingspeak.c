@@ -128,13 +128,8 @@ void tcp_setup(void)
 }
 
 void mainTask(void *pvParameters){
-  connect_wifi();
   tcp_setup();
   while (1) {
-    GPIO_OUTPUT_SET(25,1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    GPIO_OUTPUT_SET(25,0);
-    if(GPIO_INPUT_GET(26)) printf("OK\n");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
   }
